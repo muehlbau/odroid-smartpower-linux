@@ -21,45 +21,68 @@
  * 
  */
 #include <iostream>
-#include <chrono>
-#include <thread>
-#include "smartmeter.hpp"
-
+#include <stdlib.h>
+#include <string.h>
+#include <unistd.h>
+#include <stdio.h>
+#include <fstream>
+#include "hidapi.h"
 
 using namespace std;
 
 #define MAX_STR 65
 
-void test() {
-	SmartMeter sm(100);
-	cout << "init device" << endl;
-	sm.initDevice();
-	cout << "start measurement" << endl;
-	sm.startMeasurement();
+int main(int argc, char *argv[])
+{
+  if (argc!=2) {
+    cerr << "Usage: sudo smartpower logfile" << endl;
+    exit(-1);
+  }
 
-	cout << "go to sleep" << endl;
-	std::this_thread::sleep_for(std::chrono::seconds(5));
-	cout << "end measurement" << endl;
-	SmartMeter::Measurement m = sm.endMeasurement();
-	cout << m.counter << " counter" << endl;
-	cout << m.wattSum / m.counter << " average watt" << endl;
+  ofstream file;
+  file.open(argv[1]);
+  hid_device* device;
+  unsigned char buf[MAX_STR];
+  buf[0]=0x00;
+  memset((void*)&buf[2],0x00,sizeof(buf)-2);
 
-	sm.startMeasurement();
-	cout << "go to sleep" << endl;
-	std::this_thread::sleep_for(std::chrono::seconds(5));
-	cout << "end measurement" << endl;
-	m = sm.endMeasurement();
-}
+  device=hid_open(0x04d8,0x003f,NULL);
+  if (device) {
+    hid_set_nonblocking(device,true);
+  } else {
+    cerr << "no device" << endl;
+    exit(-1);
+  }
 
-int main(int argc, char *argv[]) {
-	test();
-//  if (argc!=2) {
-//    cerr << "Usage: sudo smartpower logfile" << endl;
-//    exit(-1);
-//  }
+  buf[1] = 0x37;
+  long run=0;
+  while (true) {
+    if (hid_write(device,buf,sizeof(buf))==-1) {
+      cerr << "error" << endl;
+      exit(-1);
+    }
+    if (hid_read(device,buf,sizeof(buf))==-1) {
+      cerr << "error" << endl;
+      exit(-1);
+    }
 
-//  ofstream file;
-//  file.open(argv[1]);
-//	thread test(&SmartMeter::nocheintest, new SmartMeter());
-//	test.join();
+    if(buf[0]==0x37) {
+      char volt[7]={'\0'};
+      strncpy(volt,(char*)&buf[2],5);
+
+      char ampere[7]={'\0'};
+      strncpy(ampere,(char*)&buf[10],5);
+    
+      char watt[7]={'\0'};
+      strncpy(watt,(char*)&buf[18],5);
+    
+      file << (run*100) << "," << volt << "," << ampere << "," << watt << endl;
+    }
+
+    ++run;
+    usleep(100000);
+  }
+
+  file.close();
+  hid_close(device);
 }
