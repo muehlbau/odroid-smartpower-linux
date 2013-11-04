@@ -9,6 +9,7 @@
 #define SMARTMETER_HPP_
 
 #include "hidapi.h"
+#include <thread>
 
 class SmartMeter {
 
