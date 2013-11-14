@@ -32,6 +32,12 @@ using namespace std;
 
 #define MAX_STR 65
 
+#define REQUEST_DATA        0x37
+#define REQUEST_STARTSTOP   0x80
+#define REQUEST_STATUS      0x81
+#define REQUEST_ONOFF       0x82
+#define REQUEST_VERSION     0x83
+
 int main(int argc, char *argv[])
 {
   if (argc!=2) {
@@ -54,8 +60,33 @@ int main(int argc, char *argv[])
     exit(-1);
   }
 
-  buf[1] = 0x37;
+  buf[1] = REQUEST_STATUS;
+      if (hid_write(device,buf,sizeof(buf))==-1) {
+      cerr << "error" << endl;
+      exit(-1);
+    }
+    if (hid_read(device,buf,sizeof(buf))==-1) {
+      cerr << "error" << endl;
+      exit(-1);
+    }
+  bool started = (buf[1] == 0x01);
+  if (!started) {
+     buf[1] = REQUEST_STARTSTOP;
+     if (hid_write(device,buf,sizeof(buf))==-1) {
+        cerr << "error" << endl;
+        exit(-1);
+     }
+  }
+
+  buf[1] = REQUEST_STARTSTOP;
+  if (hid_write(device,buf,sizeof(buf))==-1) {
+     cerr << "error" << endl;
+     exit(-1);
+  }
+  
+  buf[1] = REQUEST_DATA;
   long run=0;
+  bool first=true;
   while (true) {
     if (hid_write(device,buf,sizeof(buf))==-1) {
       cerr << "error" << endl;
@@ -66,21 +97,36 @@ int main(int argc, char *argv[])
       exit(-1);
     }
 
-    if(buf[0]==0x37) {
-      char volt[7]={'\0'};
-      strncpy(volt,(char*)&buf[2],5);
+    if(buf[0]==REQUEST_DATA) {
+      if (!first) {
+         char volt[7]={'\0'};
+         strncpy(volt,(char*)&buf[2],5);
 
-      char ampere[7]={'\0'};
-      strncpy(ampere,(char*)&buf[10],5);
+         char ampere[7]={'\0'};
+         strncpy(ampere,(char*)&buf[10],5);
     
-      char watt[7]={'\0'};
-      strncpy(watt,(char*)&buf[18],5);
-    
-      file << (run*100) << "," << volt << "," << ampere << "," << watt << endl;
+         char watt[7]={'\0'};
+         strncpy(watt,(char*)&buf[18],5);
+
+         char wh[7]={'\0'};
+         strncpy(wh,(char*)&buf[26],5);
+
+         cout << wh << endl;
+
+         file << (run*100) << "," << volt << "," << ampere << "," << watt << "," << wh << endl;
+      } else {
+         first=false;
+      }
     }
 
     ++run;
     usleep(100000);
+  }
+
+  buf[1] = REQUEST_STARTSTOP;
+  if (hid_write(device,buf,sizeof(buf))==-1) {
+     cerr << "error" << endl;
+     exit(-1);
   }
 
   file.close();
