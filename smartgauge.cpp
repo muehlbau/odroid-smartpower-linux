@@ -32,7 +32,7 @@
 #include <thread>
 #include <chrono>
 #include <stdexcept>
-#include "smartmeter.hpp"
+#include "smartgauge.hpp"
 
 using namespace std;
 
@@ -42,13 +42,13 @@ using namespace std;
 #define REQUEST_ONOFF       0x82
 #define REQUEST_VERSION     0x83
 
-SmartMeter::SmartMeter() :
+SmartGauge::SmartGauge() :
 		device(NULL), meter(NULL), measure(
 				false) {
 }
 
 
-SmartMeter::~SmartMeter() {
+SmartGauge::~SmartGauge() {
 	buf[0] = 0x00;
 	memset((void*) &buf[2], 0x00, sizeof(buf) - 2);
 	buf[1] = REQUEST_STARTSTOP;
@@ -63,7 +63,7 @@ SmartMeter::~SmartMeter() {
 		delete meter;
 }
 
-void SmartMeter::requestStatus(){
+void SmartGauge::requestStatus(){
 	buf[0] = 0x00;
         memset((void*) &buf[2], 0x00, sizeof(buf) - 2);
 	buf[1] = REQUEST_STATUS;
@@ -76,7 +76,7 @@ void SmartMeter::requestStatus(){
 }
 
 
-void SmartMeter::requestData(){
+void SmartGauge::requestData(){
 	buf[0] = 0x00;
 	memset((void*) &buf[2], 0x00, sizeof(buf) - 2);
 	buf[1] = REQUEST_DATA;
@@ -89,7 +89,7 @@ void SmartMeter::requestData(){
 }
 
 
-void SmartMeter::requestStartStop(bool started){
+void SmartGauge::requestStartStop(bool started){
 	if (!started) {
 		buf[1] = REQUEST_STARTSTOP;
 		if (hid_write(device, buf, sizeof(buf)) == -1) {
@@ -105,7 +105,7 @@ void SmartMeter::requestStartStop(bool started){
 	std::this_thread::sleep_for(std::chrono::milliseconds(50));
 }
 
-bool SmartMeter::initDevice() {
+bool SmartGauge::initDevice() {
 	buf[0] = 0x00;
 	memset((void*) &buf[2], 0x00, sizeof(buf) - 2);
 	device = hid_open(0x04d8, 0x003f, NULL);
@@ -124,14 +124,14 @@ bool SmartMeter::initDevice() {
 	return true;
 }
 
-void SmartMeter::reset() {
+void SmartGauge::reset() {
 	buf[1] = REQUEST_STATUS;
-	SmartMeter::requestStatus();
+	requestStatus();
 	bool started = (buf[1] == 0x01);
-	SmartMeter::requestStartStop(started);
+	requestStartStop(started);
 }
 
-double SmartMeter::getWattHour() {
+double SmartGauge::getWattHour() {
 	//request status two times because the first time meter delivers sometimes wrong values
 	requestData();
 	requestData();
@@ -151,7 +151,7 @@ double SmartMeter::getWattHour() {
 	return -1;
 }
 
-double SmartMeter::getVolt() {
+double SmartGauge::getVolt() {
 	//request status two times because the first time meter delivers sometimes wrong values
 	requestData();
 	requestData();
@@ -165,7 +165,7 @@ double SmartMeter::getVolt() {
 	return -1;
 }
 
-double SmartMeter::getAmpere() {
+double SmartGauge::getAmpere() {
 	//request status two times because the first time meter delivers sometimes wrong values
 	requestData();
 	requestData();
@@ -179,7 +179,7 @@ double SmartMeter::getAmpere() {
 	return -1;
 }
 
-double SmartMeter::getWatt() {
+double SmartGauge::getWatt() {
 	//request status two times because the first time meter delivers sometimes wrong values
 	requestData();
 	requestData();
@@ -193,7 +193,7 @@ double SmartMeter::getWatt() {
 	return -1;
 }
 
-SmartMeter::Measurement SmartMeter::getMeasurement() {
+SmartGauge::Measurement SmartGauge::getMeasurement() {
 	//request status two times because the first time meter delivers sometimes wrong values
 	requestData();
 	requestData();
@@ -217,28 +217,28 @@ SmartMeter::Measurement SmartMeter::getMeasurement() {
 }
 
 
-void SmartMeter::startSampling(	uint intervall) {
+void SmartGauge::startSampling(	uint intervall) {
 	measurements.clear();
 	if (measure == true) {
 		throw runtime_error("An old measurement still runs. End it first before starting a new one.");
 		return;
 	}
 	measure = true;
-	meter = new thread(&SmartMeter::collectSamples, this, intervall);
+	meter = new thread(&SmartGauge::collectSamples, this, intervall);
 }
 
-vector<SmartMeter::Measurement> SmartMeter::endSampling() {
+vector<SmartGauge::Measurement> SmartGauge::endSampling() {
 	measure = false;
 	meter->join();
 	return measurements;
 }
 
-void SmartMeter::collectSamples(uint intervall) {
+void SmartGauge::collectSamples(uint intervall) {
 	//sometime first call to meter returns wrong values, there we ignore the results of the frist call
 	requestData();
 	while (measure) {
 		Measurement measurement;
-		SmartMeter::requestData();
+		requestData();
 		if (buf[0] == 0x37) {
 			char volt[7] = { '\0' };
 			strncpy(volt, (char*) &buf[2], 5);

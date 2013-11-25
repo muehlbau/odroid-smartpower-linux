@@ -28,7 +28,7 @@
 #include <fstream>
 #include <thread>
 #include <vector>
-#include "smartmeter.hpp"
+#include "smartgauge.hpp"
 #include "hidapi.h"
 
 using namespace std;
@@ -59,8 +59,8 @@ int main(int argc, char *argv[])
 
   ofstream file;
   file.open(argv[1]);
-  SmartMeter smartMeter;
-  if(!smartMeter.initDevice()){
+  SmartGauge smartGauge;
+  if(!smartGauge.initDevice()){
     exit(1);
   }
 
@@ -73,7 +73,7 @@ int main(int argc, char *argv[])
     t[i].join();
   }
   
-  double wh=smartMeter.getWattHour();
+  double wh=smartGauge.getWattHour();
 
      cout << wh << endl;
 

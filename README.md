@@ -47,19 +47,21 @@ Usage:
     using namespace std;
     
     int main(int argc, char *argv[]) {
-    	SmartMeter sm(100);
-    	sm.initDevice();
-    	sm.startMeasurement();
+    	SmartGauge sg;
+    	sg.initDevice();
     
     	this_thread::sleep_for(std::chrono::seconds(5));
     
-    	SmartMeter::Measurement m = sm.endMeasurement();
-    	cout << m.wattSum / m.counter << " average watt" << endl;
+    	cout << sg.getWattHour() << " consumed watt hour" << endl;
     }
 
 Compilation:
     
-    export ISMARTMETER="directory of smartmeter.hpp"
-    export LSMARTMETER="directory of libsmartmeter.a"
-    g++ -I$ISMARTMETER -L$LSMARTMETER file_to_compile.cpp -lsmartmeter -lpthread -lusb-1.0 -lrt
+    export ISMARTGAUGE="directory of smartgauge.hpp"
+    export LSMARTGAUGE="directory of libsmartgauge.a"
+    g++ -I$ISMARTGAUGE -L$LSMARTGAUGE file_to_compile.cpp -lsmartgauge -lpthread -lusb-1.0 -lrt
   
+programmeter
+=======
+Usage:
+sudo ./programgauge logfile programm_to_measure
