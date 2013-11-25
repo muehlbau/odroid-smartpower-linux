@@ -1,4 +1,4 @@
-all: smartpower
+all: smartpower programmeter
 
 CC       ?= gcc
 CFLAGS   ?= -Wall -g -fpic
@@ -15,6 +15,9 @@ LIBS_USB  = `pkg-config libusb-1.0 --libs` -lrt -lpthread
 LIBS      = $(LIBS_USB)
 
 smartpower: $(COBJS) $(CPPOBJS)
+	$(CXX) $(LDFLAGS) $^ $(LIBS_USB) -o $@
+
+programmeter: $(COBJS) programmeter.o smartmeter.o
 	$(CXX) $(LDFLAGS) $^ $(LIBS_USB) -o $@
 
 $(COBJS): %.o: %.c

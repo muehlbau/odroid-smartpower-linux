@@ -1,8 +1,5 @@
-#ifndef H_SMARTMETER
-#define H_SMARTMETER
-
 /*
- * Copyright (c) 2013 Tobias Muehlbauer. All rights reserved.
+ * Copyright (c) 2013 Robert Seilbeck. All rights reserved.
  *
  * Permission is hereby granted, free of charge, to any person obtaining a
  * copy of this software and associated documentation files (the "Software"),
@@ -23,6 +20,9 @@
  * DEALINGS IN THE SOFTWARE.
  *
  */
+#ifndef H_SMARTMETER
+#define H_SMARTMETER
+
 #include <iostream>
 #include <stdlib.h>
 #include <string.h>
@@ -31,71 +31,214 @@
 #include <fstream>
 #include <thread>
 #include <chrono>
+#include <stdexcept>
 #include "smartmeter.hpp"
 
 using namespace std;
 
-#define MAX_STR 65
+#define REQUEST_DATA        0x37
+#define REQUEST_STARTSTOP   0x80
+#define REQUEST_STATUS      0x81
+#define REQUEST_ONOFF       0x82
+#define REQUEST_VERSION     0x83
 
-SmartMeter::SmartMeter(uint intervall) :
-		measurement(new Measurement()), device(NULL), meter(NULL), measure(
-				false), intervall(intervall) {
+SmartMeter::SmartMeter() :
+		device(NULL), meter(NULL), measure(
+				false) {
+}
 
+
+SmartMeter::~SmartMeter() {
+	buf[0] = 0x00;
+	memset((void*) &buf[2], 0x00, sizeof(buf) - 2);
+	buf[1] = REQUEST_STARTSTOP;
+	if (hid_write(device, buf, sizeof(buf)) == -1) {
+		cerr << "couldn't stop meter" << endl;
+	}
+	//Meter needs some time to reset
+	std::this_thread::sleep_for(std::chrono::milliseconds(50));
+	if (device != NULL)
+		hid_close(device);
+	if (meter != NULL)
+		delete meter;
+}
+
+void SmartMeter::requestStatus(){
+	buf[0] = 0x00;
+        memset((void*) &buf[2], 0x00, sizeof(buf) - 2);
+	buf[1] = REQUEST_STATUS;
+	if (hid_write(device, buf, sizeof(buf)) == -1) {
+		throw runtime_error("Request status write failed");
+	}
+	if (hid_read(device, buf, sizeof(buf)) == -1) {
+		throw runtime_error("Request status read failed");
+	}
+}
+
+
+void SmartMeter::requestData(){
+	buf[0] = 0x00;
+	memset((void*) &buf[2], 0x00, sizeof(buf) - 2);
+	buf[1] = REQUEST_DATA;
+	if (hid_write(device, buf, sizeof(buf)) == -1) {
+		throw runtime_error("Request data write failed");
+	}
+	if (hid_read(device, buf, sizeof(buf)) == -1) {
+		throw runtime_error("Request data read failed");
+	}
+}
+
+
+void SmartMeter::requestStartStop(bool started){
+	if (!started) {
+		buf[1] = REQUEST_STARTSTOP;
+		if (hid_write(device, buf, sizeof(buf)) == -1) {
+			throw runtime_error("Request start stop failed");
+		}
+	}
+
+	buf[1] = REQUEST_STARTSTOP;
+	if (hid_write(device, buf, sizeof(buf)) == -1) {
+		throw runtime_error("Request start stop failed");
+	}
+	//Meter needs some time to reset
+	std::this_thread::sleep_for(std::chrono::milliseconds(50));
 }
 
 bool SmartMeter::initDevice() {
+	buf[0] = 0x00;
+	memset((void*) &buf[2], 0x00, sizeof(buf) - 2);
 	device = hid_open(0x04d8, 0x003f, NULL);
+
 	if (device) {
-		hid_set_nonblocking(device, true);
-		return true;
+		hid_set_nonblocking(device, false);
 	} else {
 		cerr << "no device" << endl;
 		return false;
 	}
+	buf[1] = REQUEST_STATUS;
+	requestStatus();
+
+	bool started = (buf[1] == 0x01);
+	requestStartStop(started);
+	return true;
 }
 
-void SmartMeter::startMeasurement() {
-	measurement->ampereSum=0;
-	measurement->voltSum=0;
-	measurement->wattSum=0;
-	measurement->counter=0;
+void SmartMeter::reset() {
+	buf[1] = REQUEST_STATUS;
+	SmartMeter::requestStatus();
+	bool started = (buf[1] == 0x01);
+	SmartMeter::requestStartStop(started);
+}
+
+double SmartMeter::getWattHour() {
+	//request status two times because the first time meter delivers sometimes wrong values
+	requestData();
+	requestData();
+
+	if (buf[0] == REQUEST_DATA) {
+		char volt[7] = { '\0' };
+		strncpy(volt, (char*) &buf[2], 5);
+		char ampere[7] = { '\0' };
+		strncpy(ampere, (char*) &buf[10], 5);
+		char watt[7] = { '\0' };
+		strncpy(watt, (char*) &buf[18], 5);
+		char wh[7] = { '\0' };
+		strncpy(wh, (char*) &buf[26], 5);
+
+		return atof(wh);
+	}
+	return -1;
+}
+
+double SmartMeter::getVolt() {
+	//request status two times because the first time meter delivers sometimes wrong values
+	requestData();
+	requestData();
+
+	if (buf[0] == REQUEST_DATA) {
+		char volt[7] = { '\0' };
+		strncpy(volt, (char*) &buf[2], 5);
+
+		return atof(volt);
+	}
+	return -1;
+}
+
+double SmartMeter::getAmpere() {
+	//request status two times because the first time meter delivers sometimes wrong values
+	requestData();
+	requestData();
+
+	if (buf[0] == REQUEST_DATA) {
+		char ampere[7] = { '\0' };
+		strncpy(ampere, (char*) &buf[10], 5);
+
+		return atof(ampere);
+	}
+	return -1;
+}
+
+double SmartMeter::getWatt() {
+	//request status two times because the first time meter delivers sometimes wrong values
+	requestData();
+	requestData();
+
+	if (buf[0] == REQUEST_DATA) {
+		char watt[7] = { '\0' };
+		strncpy(watt, (char*) &buf[18], 5);
+
+		return atof(watt);
+	}
+	return -1;
+}
+
+SmartMeter::Measurement SmartMeter::getMeasurement() {
+	//request status two times because the first time meter delivers sometimes wrong values
+	requestData();
+	requestData();
+	Measurement measurement;
+	if (buf[0] == 0x37) {
+		char volt[7] = { '\0' };
+		strncpy(volt, (char*) &buf[2], 5);
+		char ampere[7] = { '\0' };
+		strncpy(ampere, (char*) &buf[10], 5);
+		char watt[7] = { '\0' };
+		strncpy(watt, (char*) &buf[18], 5);
+		char wh[7] = { '\0' };
+		strncpy(wh, (char*) &buf[26], 5);
+
+		measurement.volt = atof(volt);
+		measurement.ampere = atof(ampere);
+		measurement.watt = atof(watt);
+		measurement.wattHour = atof(wh);
+	}
+	return measurement;
+}
+
+
+void SmartMeter::startSampling(	uint intervall) {
+	measurements.clear();
 	if (measure == true) {
-		cerr
-				<< "An old measurement still runs. End it first before starting a new one.";
+		throw runtime_error("An old measurement still runs. End it first before starting a new one.");
 		return;
 	}
 	measure = true;
-	meter = new thread(&SmartMeter::performMeasurement, this);
+	meter = new thread(&SmartMeter::collectSamples, this, intervall);
 }
 
-SmartMeter::Measurement SmartMeter::endMeasurement() {
+vector<SmartMeter::Measurement> SmartMeter::endSampling() {
 	measure = false;
 	meter->join();
-	return *measurement;
+	return measurements;
 }
 
-void SmartMeter::performMeasurement() {
-	unsigned char buf[MAX_STR];
-	buf[0] = 0x00;
-	memset((void*) &buf[2], 0x00, sizeof(buf) - 2);
-	buf[1] = 0x37;
+void SmartMeter::collectSamples(uint intervall) {
+	//sometime first call to meter returns wrong values, there we ignore the results of the frist call
+	requestData();
 	while (measure) {
-		if (hid_write(device, buf, sizeof(buf)) == -1) {
-			cerr << "error" << endl;
-			measurement->voltSum += 0;
-			measurement->ampereSum += 0;
-			measurement->wattSum += 0;
-			measurement->counter = 0;
-			exit(-1);
-		}
-		if (hid_read(device, buf, sizeof(buf)) == -1) {
-			cerr << "error" << endl;
-			measurement->voltSum += 0;
-			measurement->ampereSum += 0;
-			measurement->wattSum += 0;
-			measurement->counter = 0;
-			exit(-1);
-		}
+		Measurement measurement;
+		SmartMeter::requestData();
 		if (buf[0] == 0x37) {
 			char volt[7] = { '\0' };
 			strncpy(volt, (char*) &buf[2], 5);
@@ -103,16 +246,17 @@ void SmartMeter::performMeasurement() {
 			strncpy(ampere, (char*) &buf[10], 5);
 			char watt[7] = { '\0' };
 			strncpy(watt, (char*) &buf[18], 5);
+			char wh[7] = { '\0' };
+			strncpy(wh, (char*) &buf[26], 5);
 
-			measurement->voltSum += atof(volt);
-			measurement->ampereSum += atof(ampere);
-			measurement->wattSum += atof(watt);
-			measurement->counter++;
+			measurement.volt = atof(volt);
+			measurement.ampere = atof(ampere);
+			measurement.watt = atof(watt);
+			measurement.wattHour = atof(wh);
 		}
+		measurements.push_back(measurement);
 		std::this_thread::sleep_for(std::chrono::milliseconds(intervall));
 	}
 }
-
-
 
 #endif

@@ -10,55 +10,65 @@
 
 #include "hidapi.h"
 #include <thread>
+#include <vector>
+
+#define MAX_STR 65
+
+using namespace std;
 
 class SmartMeter {
 
 public:
 	struct Measurement {
-		uint counter;
-		double wattSum;
-		double voltSum;
-		double ampereSum;
+		double watt;
+		double volt;
+		double ampere;
+		double wattHour;
 	};
 
-	/**
-	 * interval - In which time intervals in ms is the energy consumption checked
-	 */
-	SmartMeter(uint interval);
+	SmartMeter();
 
 	/**
-	 * Initializes device.
+	 * Initializes and resets the device.
 	 * Returns false if no device could be found. True if initialization was successful.
-	 *
+	 * If this is done in short intervals, the hardware has troubles and sometimes delivers wrong (negativ) values.
 	 */
 	bool initDevice();
 
-	void startMeasurement();
+	/**
+	 * Resets the powermeter. If this is done in short intervals, the hardware has troubles and sometimes delivers wrong (negativ) values.
+	 */
+	void reset();
+
+	double getWattHour();
+	double getVolt();
+	double getAmpere();
+	double getWatt();
+	Measurement getMeasurement();
+	/**
+	 * interval - In which time intervals in ms is the energy consumption sampled
+	 */
+	void startSampling(uint intervall);
 
 	/**
-	 * Ends a measurement and returns a Measurement struct.
-	 * This struct can be used to calculate the average energy consumption e.g. Measurment.wattSum / Measurement.counter
+	 * Ends a measurement and returns a vector of Measurement structs.
 	 *
 	 */
-	Measurement endMeasurement();
+	vector<SmartMeter::Measurement> endSampling();
 
-	~SmartMeter(){
-		if(device!=NULL)
-			hid_close(device);
-		if(measurement!=NULL)
-			delete measurement;
-		if(meter!=NULL)
-			delete meter;
-	};
+	~SmartMeter();
 
 private:
-	Measurement* measurement;
+	vector<Measurement> measurements;
 	hid_device* device;
 	std::thread* meter;
 	bool measure;
-	uint intervall;
+	unsigned char buf[MAX_STR];
 
-	void performMeasurement();
+	void collectSamples(uint intervall);
+	void requestData();
+	void requestStatus();
+	void requestStartStop(bool started);
 };
 
 #endif /* SMARTMETER_HPP_ */
