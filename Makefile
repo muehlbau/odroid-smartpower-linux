@@ -8,7 +8,7 @@ CXXFLAGS ?= -Wall -g -fpic -std=c++11
 
 LDFLAGS  ?= -Wall -g
 
-COBJS     = hid.o 
+COBJS     = hid.o
 CPPOBJS   = main.o smartgauge.o
 OBJS      = $(COBJS) $(CPPOBJS)
 LIBS_USB  = `pkg-config libusb-1.0 --libs` -lrt -lpthread
@@ -29,7 +29,19 @@ $(CPPOBJS): %.o: %.cpp
 lib: smartpower
 	ar rvs libsmartgauge.a smartgauge.o hid.o
 
+install: lib
+	install -D libsmartgauge.a /usr/local/lib/
+	@mkdir -p /usr/local/include/smartgauge
+	install -D smartgauge.hpp /usr/local/include/smartgauge/
+
+uninstall:
+	rm -f /usr/local/lib/libsmartgauge.a
+	rm -rf /usr/local/include/smartgauge
+
 clean:
 	rm -f $(OBJS) programgauge.o
+
+cleanall: clean
+	rm -f smartpower libsmartgauge.a
 
 .PHONY: clean libs
