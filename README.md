@@ -37,30 +37,38 @@ Installation:
 
 make lib
 
+Global installation:
+
+make install
+
+Uninstall:
+
+make uninstall
+
 Usage:
 
     #include <iostream>
     #include <chrono>
     #include <thread>
     #include "smartmeter.hpp"
-    
+
     using namespace std;
-    
+
     int main(int argc, char *argv[]) {
     	SmartGauge sg;
     	sg.initDevice();
-    
+
     	this_thread::sleep_for(std::chrono::seconds(5));
-    
+
     	cout << sg.getWattHour() << " consumed watt hour" << endl;
     }
 
 Compilation:
-    
+
     export ISMARTGAUGE="directory of smartgauge.hpp"
     export LSMARTGAUGE="directory of libsmartgauge.a"
     g++ -I$ISMARTGAUGE -L$LSMARTGAUGE file_to_compile.cpp -lsmartgauge -lpthread -lusb-1.0 -lrt
-  
+
 programmeter
 =======
 Usage:
